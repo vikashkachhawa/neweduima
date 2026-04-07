@@ -1,0 +1,686 @@
+================================================================================
+                        EDUIMA — PROJECT DETAILS
+              Multi-Tenant School Management & Learning Portal
+================================================================================
+
+Version  : 1.0.0
+Status   : Active Development
+Updated  : April 2026
+
+--------------------------------------------------------------------------------
+WHAT IS EDUIMA?
+--------------------------------------------------------------------------------
+
+Eduima is a full-stack multi-tenant school management system built for
+educational institutions. It allows multiple schools to operate on a single
+platform with complete data isolation, role-based access control, and a rich
+set of tools for administrators, faculty, and students.
+
+Beyond administration, Eduima includes a student-facing portal with social
+features (forum, chat, social hub), fun learning games (Blockly-based coding
+sandbox), and detailed faculty & student profiles.
+
+--------------------------------------------------------------------------------
+TECHNOLOGY STACK
+--------------------------------------------------------------------------------
+
+  FRONTEND
+  --------
+  - React 18               — Component-based UI with Hooks & Context API
+  - Vite                   — Fast development server & optimized builds
+  - Material UI (MUI) v5   — UI components, theming, sx styling
+  - React Router v6        — Client-side routing with protected routes
+  - Axios                  — REST API communication with JWT bearer tokens
+  - Redux Toolkit          — Centralized game state management
+  - Blockly                — Visual block-based programming editor (games)
+  - Framer Motion          — Animations
+  - Emoji Picker React     — Emoji support in Chat & Social Hub
+
+  BACKEND
+  -------
+  - Node.js v18+           — JavaScript runtime
+  - Express.js             — REST API server (port 5000)
+  - MySQL                  — Relational database
+  - mysql2                 — Lightweight MySQL driver
+  - JWT (jsonwebtoken)     — Stateless authentication tokens
+  - bcryptjs               — Password hashing
+  - express-validator      — Input validation at API boundaries
+  - node-cron              — Scheduled background jobs
+  - Nodemon                — Auto-reload during development
+
+  INFRASTRUCTURE
+  --------------
+  - XAMPP / MySQL          — Local database server
+  - Vite Dev Server        — Frontend on port 5173
+  - Express Server         — Backend on port 5000
+
+--------------------------------------------------------------------------------
+USER ROLES
+--------------------------------------------------------------------------------
+
+  ROLE            DESCRIPTION                          DEFAULT ENTRY POINT
+  ─────────────── ──────────────────────────────────── ──────────────────────
+  super_admin     Full platform management             /dashboard
+  school_admin    Manage own school's data & users     /dashboard → /school-admin
+  faculty         Manage classes, students, grades     /faculty/dashboard
+  student         Access profile, forum, chat, games   /student/profile
+
+  Note: Faculty uses a separate login page (/faculty/login).
+        All other roles log in at /login.
+        Users with must_change_password = true are redirected to
+        /change-password before accessing any other page.
+
+--------------------------------------------------------------------------------
+MODULES & FEATURES
+--------------------------------------------------------------------------------
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  1. AUTHENTICATION & SECURITY                                            │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  - JWT-based login for all roles
+  - Separate faculty login flow (/faculty/login)
+  - Passwords hashed with bcryptjs (salt rounds: 10)
+  - Force password change on first login (must_change_password flag)
+  - Role-based redirect after login
+  - ProtectedRoute wrapper enforces allowedRoles on every page
+  - Password reset by admins — generates a temporary password
+  - User receives temp password and is forced to change it on next login
+  - Audit logging for sensitive actions (password resets, role changes)
+  - OWASP-aligned input validation on all API endpoints
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  2. SUPER ADMIN PANEL                                                    │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  Dashboard (/dashboard)
+  - Platform-wide summary metrics
+  - Quick navigation to all management sections
+
+  Schools (/schools, /schools/:schoolId)
+  - List all registered schools
+  - View per-school details, user counts, subscription status
+
+  Users (/users)
+  - View and manage users across all schools
+  - Filter by school, role, or status
+  - Toggle user active/inactive status
+
+  Role Management (/roles)
+  - Create and manage roles with granular permission sets
+  - Assign roles to users
+  - RBAC permission checks throughout the app (PermissionContext)
+
+  Subscriptions (/subscriptions)
+  - Manage school subscription plans and tiers
+  - View billing cycles and plan details
+
+  Analytics (/analytics)
+  - Platform-wide usage statistics
+  - Date range filtering
+  - Metrics: logins, active users, content created, engagement
+
+  Templates (/templates)
+  - Create reusable school page templates
+  - Push templates to school admins for their school pages
+
+  Announcements (/announcements)
+  - Broadcast announcements to all schools or selected schools
+
+  System Settings (/system-settings)
+  - Platform-level configuration (features on/off, limits, etc.)
+
+  Security (/security)
+  - Security monitoring: failed logins, suspicious activity logs
+
+  Password Management
+  - SuperAdminPasswordManagement.jsx — admin can reset any user's password
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  3. SCHOOL ADMIN PANEL                                                   │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  School Dashboard (/school-admin)
+  - Stats cards: total students, faculty, announcements
+  - Quick access to users, announcements, school page
+
+  User Management
+  - List all users within the school
+  - Create new faculty or student accounts
+  - View user detail page (/school-admin/users/:userId)
+    * Full profile: name, email, role, join date, active status
+    * Reset password (generates temp password, shows copy dialog)
+    * Activate / Deactivate account with confirmation dialog
+
+  Announcements
+  - Create and view school-specific announcements
+  - Shown on school public page
+
+  School Page (Public Profile)
+  - Edit school's public-facing page (/school/:id/page)
+  - Template library from super admin (/school-template-library)
+
+  Password Management
+  - SchoolAdminPasswordManagement.jsx — reset passwords for own-school users
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  4. FACULTY PORTAL                                                       │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  Faculty Dashboard (/faculty/dashboard)
+  - Overview: upcoming classes, pending assignments, recent attendance
+
+  Classes (/faculty/classes)
+  - View all assigned classes with subject and section details
+
+  Students (/faculty/students)
+  - List students enrolled in the faculty's classes
+  - Navigate to individual student profiles
+
+  Assignments (/faculty/assignments)
+  - Create assignments: title, description, due date, class
+  - View submitted assignments and grade them
+
+  Attendance (/faculty/attendance)
+  - Mark attendance per class per day
+  - View historical attendance records
+
+  Schedule (/faculty/schedule)
+  - Personal weekly timetable
+
+  Faculty Profile (/faculty/profile, /faculty/profile/:facultyId)
+  - Own profile: personal info, subjects, qualifications, bio
+  - Viewable by students and school admins via :facultyId route
+
+  Password Management
+  - FacultyPasswordManagement.jsx — faculty can change their own password
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  5. STUDENT PORTAL                                                       │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  Student Profile (/student/profile, /student/profile/:studentId)
+  - Personal dashboard: name, class, subjects, attendance summary
+  - Grades overview per subject
+  - Viewable by faculty and school admins via :studentId param
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  6. FORUM (Community Q&A)                                                │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  Access: school_admin, faculty, student
+
+  Forum List (/forum)
+  - Full-width layout with blue gradient header
+  - Full-text search bar across all questions
+  - Question cards: title, 200-char truncated preview, tag chips,
+    answer count badge, author & date
+  - Clickable cards navigate to question detail page
+
+  Ask Question (Modal Dialog)
+  - Title field (minimum 15 characters)
+  - Question body textarea (6 rows)
+  - Tags: add multiple, shown as deletable chips
+  - Audience toggle: "For Students" or "For School"
+  - Real-time quality score bar (0–100% based on title, body, tags)
+
+  Question Detail (/forum/:questionId)
+  - Full question: title, body, tags, author, timestamp
+  - Helpful toggle (ThumbUp icon):
+    * Grey = not yet marked by you → click to mark → turns blue
+    * Counts update instantly, no page refresh
+    * Each user can only vote once (UNIQUE constraint in DB)
+    * Click again to remove vote (count decreases)
+  - Delete button (red, author only):
+    * Confirmation dialog before deleting
+    * Soft delete (is_active = FALSE in DB)
+    * Redirects to forum list after question delete
+  - Reply editor: full-width textarea with embedded Reply button
+  - Threaded/nested replies at any depth (4px indent per level)
+  - Each reply: author, timestamp, helpful toggle, delete (author only)
+
+  Database Tables
+  - forum_questions  (id, title, body, tags, author_id, replies_count,
+                      helpful_count, is_active, created_at)
+  - forum_replies    (id, question_id, parent_reply_id, body, author_id,
+                      helpful_count, is_active, created_at)
+  - forum_helpful    (user_id, target_type ENUM('question','reply'),
+                      target_id) — UNIQUE KEY prevents duplicate votes
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  7. CHAT (Direct Messaging)                                              │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  Access: school_admin, faculty, student
+
+  Chat (/chat)
+  - Conversations list with last message preview
+  - Real-time or async message exchange between users
+  - Emoji picker support
+  - Message timestamps
+
+  User Profile from Chat (/chat/profile/:userId)
+  - View the profile of any user directly from a chat conversation
+  - ChatUserProfile.jsx page
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  8. SOCIAL HUB                                                           │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  Access: school_admin, faculty, student
+
+  - Activity / post feed for the school community
+  - SocialNetworkingPanel component used across the app
+  - School page with followers, posts, announcements
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  9. NOTIFICATIONS                                                        │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  - Notification bell in Layout sidebar
+  - Notifications.jsx component with popover panel
+  - Backend: notificationController.js + notifications.js route
+  - Triggered by: announcements, forum activity, new assignments
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  11. SUBSCRIPTION SYSTEM                                                 │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  - Multi-tier subscription plans for schools
+  - SubscriptionContext wraps entire app — any component can gate features
+    by subscription level using useSubscription() hook
+  - SubscriptionStatus.jsx badge shown in UI
+  - SubscriptionManagement.jsx — school-level plan overview
+  - Backend: subscription.js route + controller logic
+  - Super admin can upgrade/downgrade any school's plan
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  12. RBAC (Role-Based Access Control)                                    │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  - PermissionContext provides hasPermission('action') to all components
+  - checkPermission middleware on sensitive backend routes
+  - RoleManagement.jsx — super admin creates/edits roles & permissions
+  - RBAC routes: GET/POST/DELETE /rbac/users/:userId/roles
+  - Permissions checked before UI elements render (hiding buttons for
+    unauthorized users) AND at API level (double enforcement)
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  13. PLATFORM CONTROLS                                                   │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  - Super admin can toggle platform-wide features on/off
+  - Applied via apply-platform-controls.js migration script
+  - System Settings page (/system-settings)
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  14. SCHOOL PUBLIC PAGE                                                  │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  - Each school has a public-facing profile (/school/:schoolId/page)
+  - Shows: school name, description, announcements, faculty highlights
+  - School admin can edit content via template library
+  - SchoolPageProfile.jsx + SchoolPageComponents/ folder
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  15. ANALYTICS                                                           │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  - Platform-wide usage data tracked over time
+  - Date range filter on the analytics dashboard
+  - Metrics tracked: active users, logins, posts, assignments, attendance
+  - Backend bootstrap script: bootstrap-analytics.js
+  - Platform metrics seed: create-platform-metrics.js
+  - Verification: verify-analytics.js, verify-analytics-data.js
+
+--------------------------------------------------------------------------------
+COMPLETE ROUTE MAP
+--------------------------------------------------------------------------------
+
+  PUBLIC / AUTH
+  /login                              Login (super_admin, school_admin, student)
+  /faculty/login                      Faculty-only login page
+  /change-password                    Forced password change on first login
+
+  SUPER ADMIN
+  /dashboard                          Main dashboard
+  /schools                            All schools list
+  /schools/:schoolId                  School detail view
+  /users                              Platform-wide user management
+  /roles                              RBAC role management
+  /subscriptions                      Subscription plan management
+  /analytics                          Platform analytics
+  /templates                          Super admin template creation
+  /announcements                      Broadcast announcements
+  /system-settings                    Platform configuration
+  /security                           Security monitoring
+
+  SCHOOL ADMIN
+  /school-admin                       School dashboard
+  /school-admin/users/:userId         User detail + reset password / toggle status
+
+  FACULTY
+  /faculty/dashboard                  Faculty home
+  /faculty/classes                    Assigned classes
+  /faculty/students                   Students in classes
+  /faculty/assignments                Create & grade assignments
+  /faculty/attendance                 Mark/view attendance
+  /faculty/schedule                   Weekly timetable
+  /faculty/profile                    Own profile
+  /faculty/profile/:facultyId         View any faculty profile
+
+  STUDENT
+  /student/profile                    Own profile & grades
+  /student/profile/:studentId         View any student profile
+
+  COMMUNITY (shared: school_admin, faculty, student)
+  /social-hub                         Social activity feed
+  /forum                              Forum question list
+  /forum/:questionId                  Question detail + replies
+  /chat                               Direct messaging
+  /chat/profile/:userId               View user profile from chat
+
+  SCHOOL PUBLIC
+  /school/:schoolId/page              School public profile
+  /school-template-library            Template library for school admin
+
+--------------------------------------------------------------------------------
+BACKEND API ROUTES
+--------------------------------------------------------------------------------
+
+  AUTH
+  POST   /api/auth/login
+  POST   /api/auth/faculty-login
+  POST   /api/auth/change-password
+  GET    /api/auth/me
+
+  SUPER ADMIN
+  GET    /api/super-admin/users
+  POST   /api/super-admin/users
+  POST   /api/super-admin/users/:id/reset-password
+  PATCH  /api/super-admin/users/:id/toggle-status
+  GET    /api/super-admin/schools
+  GET    /api/super-admin/analytics
+
+  SCHOOL ADMIN
+  GET    /api/school/dashboard/stats
+  GET    /api/school/users
+  GET    /api/school/users/:userId
+  POST   /api/school/users
+  POST   /api/school/users/:userId/reset-password
+  PATCH  /api/school/users/:userId/toggle-status
+  GET    /api/school/announcements
+  POST   /api/school/announcements
+
+  FORUM
+  GET    /api/forum/questions               List all questions (+ ?q=search)
+  POST   /api/forum/questions               Create question
+  GET    /api/forum/questions/:id           Get single question
+  GET    /api/forum/questions/:id/replies   Get threaded replies
+  POST   /api/forum/questions/:id/replies   Post a reply
+  DELETE /api/forum/questions/:id           Delete own question (soft)
+  POST   /api/forum/questions/:id/helpful   Toggle helpful mark
+  DELETE /api/forum/replies/:id             Delete own reply (soft)
+  POST   /api/forum/replies/:id/helpful     Toggle helpful mark on reply
+
+  CHAT
+  GET    /api/chat/conversations
+  GET    /api/chat/conversations/:id/messages
+  POST   /api/chat/conversations/:id/messages
+
+  SOCIAL
+  GET    /api/social/feed
+  POST   /api/social/posts
+
+  FACULTY PROFILE
+  GET    /api/faculty-profile/:facultyId
+  PUT    /api/faculty-profile
+
+  SCHOOL PAGE
+  GET    /api/school-page/:schoolId
+  PUT    /api/school-page/:schoolId
+
+  SUBSCRIPTIONS
+  GET    /api/subscription
+  PATCH  /api/subscription/:schoolId
+
+  ANALYTICS
+  GET    /api/analytics/platform
+  GET    /api/analytics/engagement
+
+  NOTIFICATIONS
+  GET    /api/notifications
+  PATCH  /api/notifications/:id/read
+
+  RBAC
+  GET    /api/rbac/users/:userId/permissions
+  GET    /api/rbac/users/:userId/roles
+  POST   /api/rbac/users/:userId/roles
+  DELETE /api/rbac/users/:userId/roles/:roleId
+
+  PASSWORD RESET
+  POST   /api/password-reset/request
+  POST   /api/password-reset/confirm
+
+--------------------------------------------------------------------------------
+FRONTEND FILE STRUCTURE
+--------------------------------------------------------------------------------
+
+  frontend/src/
+  ├── App.jsx                         Root component, all routes defined here
+  ├── main.jsx                        React entry point
+  ├── index.css                       Global styles
+  ├── pages/                          One file per page/screen
+  │   ├── Login.jsx
+  │   ├── Dashboard.jsx
+  │   ├── Schools.jsx / SchoolDetails.jsx
+  │   ├── Users.jsx
+  │   ├── RoleManagement.jsx
+  │   ├── Subscriptions.jsx / SubscriptionManagement.jsx
+  │   ├── Analytics.jsx
+  │   ├── Announcements.jsx
+  │   ├── SystemSettings.jsx
+  │   ├── Security.jsx
+  │   ├── SuperAdminTemplates.jsx
+  │   ├── SuperAdminPasswordManagement.jsx
+  │   ├── SchoolAdmin.jsx
+  │   ├── SchoolUserDetail.jsx
+  │   ├── SchoolAdminPasswordManagement.jsx
+  │   ├── SchoolPageProfile.jsx
+  │   ├── SchoolTemplateLibrary.jsx
+  │   ├── SchoolDetails.jsx
+  │   ├── SchoolUserDetail.jsx
+  │   ├── FacultyLogin.jsx
+  │   ├── FacultyDashboard.jsx
+  │   ├── FacultyClasses.jsx
+  │   ├── FacultyStudents.jsx
+  │   ├── FacultyAssignments.jsx
+  │   ├── FacultyAttendance.jsx
+  │   ├── FacultySchedule.jsx
+  │   ├── FacultyProfile.jsx
+  │   ├── FacultyPasswordManagement.jsx
+  │   ├── StudentProfile.jsx
+  │   ├── StudentDashboard.jsx
+  │   ├── SocialHub.jsx
+  │   ├── Forum.jsx
+  │   ├── ForumQuestion.jsx
+  │   ├── Chat.jsx
+  │   ├── ChatUserProfile.jsx
+  │   └── ChangePasswordOnFirstLogin.jsx
+  ├── components/
+  │   ├── Layout.jsx                  App shell: Sidebar + top bar
+  │   ├── Sidebar.jsx                 Navigation sidebar (role-aware links)
+  │   ├── ProtectedRoute.jsx          Route guard with role enforcement
+  │   ├── Notifications.jsx           Notification bell + popover
+  │   ├── SubscriptionStatus.jsx      Subscription tier badge
+  │   ├── SocialNetworkingPanel.jsx   Social feed panel
+  │   ├── ThemeToggle.jsx             Dark/light mode switch
+  │   ├── ErrorBoundary.jsx           React error boundary wrapper
+  │   ├── ConfirmDialog.jsx           Reusable confirmation dialog
+  │   ├── InfoDialog.jsx              Reusable info dialog
+  │   ├── PromptDialog.jsx            Reusable prompt dialog
+  │   ├── FacultyProfileComponents/   Sub-components for faculty profile
+  │   └── SchoolPageComponents/       Sub-components for school public page
+  ├── contexts/
+  │   ├── AuthContext.jsx             Current user, login/logout
+  │   ├── PermissionContext.jsx       hasPermission() hook
+  │   ├── SubscriptionContext.jsx     Subscription tier access
+  │   └── ThemeContext.jsx            Light/dark theme state
+  ├── services/
+  │   ├── index.js                    All Axios service objects (authService,
+  │   │                               schoolService, superAdminService, etc.)
+  │   └── forum.js                    Forum-specific API methods
+  └── utils/                          Shared helper functions
+
+--------------------------------------------------------------------------------
+BACKEND FILE STRUCTURE
+--------------------------------------------------------------------------------
+
+  backend/
+  ├── server.js                       Express app entry point, middleware setup
+  ├── package.json                    Dependencies & npm scripts
+  ├── config/
+  │   └── database.js                 MySQL connection pool (mysql2)
+  ├── controllers/
+  │   ├── authController.js           Login, token generation, password change
+  │   ├── superAdminController.js     Schools, users, analytics, system
+  │   ├── schoolController.js         School admin: users, announcements, stats
+  │   ├── facultyProfileController.js Faculty profile CRUD
+  │   ├── schoolPageController.js     School public page management
+  │   ├── socialController.js         Posts, feed, social interactions
+  │   ├── forumController.js          Questions, replies, helpful toggle, delete
+  │   ├── chatController.js           Conversations & messages
+  │   ├── notificationController.js   Notifications CRUD
+  │   ├── passwordResetController.js  Password reset flow
+  │   └── templateController.js       Admin templates
+  ├── routes/
+  │   ├── auth.js
+  │   ├── superAdmin.js
+  │   ├── school.js
+  │   ├── facultyProfile.js
+  │   ├── schoolPage.js
+  │   ├── social.js
+  │   ├── forum.js
+  │   ├── chat.js
+  │   ├── notifications.js
+  │   ├── passwordResetRoutes.js
+  │   ├── analytics.js
+  │   ├── subscription.js
+  │   ├── platformControls.js
+  │   ├── rbac.js
+  │   ├── schoolSetupTemplates.js
+  │   └── superAdminTemplates.js
+  ├── middleware/
+  │   ├── auth.js (or similar)        JWT verification, req.user population
+  │   └── checkPermission.js          RBAC permission enforcement
+  ├── models/                         DB model helpers (User, School, etc.)
+  ├── database/
+  │   ├── schema.sql                  Base database schema
+  │   ├── ensureForumSchema.js        Auto-creates forum tables on startup
+  │   └── seed-forum.js              Forum dummy data (8 questions, 8 replies)
+  ├── migrations/                     Versioned DB migration scripts
+  ├── services/                       Business logic abstractions
+  └── uploads/                        File upload storage
+
+--------------------------------------------------------------------------------
+DATABASE — KEY TABLES
+--------------------------------------------------------------------------------
+
+  users                 id, first_name, last_name, email, password_hash,
+                        role, school_id, is_active, must_change_password,
+                        created_at
+
+  schools               id, name, subdomain, description, is_active,
+                        subscription_plan, created_at
+
+  forum_questions       id, school_id, author_id, title, body, tags,
+                        audience, replies_count, helpful_count, is_active,
+                        created_at
+
+  forum_replies         id, question_id, parent_reply_id, author_id, body,
+                        helpful_count, is_active, created_at
+
+  forum_helpful         id, user_id, target_type ENUM('question','reply'),
+                        target_id, created_at
+                        UNIQUE KEY (user_id, target_type, target_id)
+
+  announcements         id, school_id, author_id, title, content,
+                        audience, created_at
+
+  assignments           id, class_id, faculty_id, title, description,
+                        due_date, created_at
+
+  attendance            id, class_id, student_id, faculty_id, date,
+                        status, created_at
+
+  notifications         id, user_id, type, title, body, is_read, created_at
+
+  subscriptions         id, school_id, plan, start_date, end_date, status
+
+  roles                 id, name, school_id, permissions (JSON)
+
+  user_roles            user_id, role_id
+
+--------------------------------------------------------------------------------
+NPM SCRIPTS
+--------------------------------------------------------------------------------
+
+  BACKEND  (cd backend)
+  npm run dev             Start backend with nodemon (auto-reload)
+  npm run start           Start backend in production mode
+  npm run seed:forum      Seed 8 forum questions + 8 replies (dummy data)
+
+  FRONTEND  (cd frontend)
+  npm run dev             Start Vite dev server on port 5173
+  npm run build           Build for production
+  npm run preview         Preview production build
+
+--------------------------------------------------------------------------------
+SETUP INSTRUCTIONS
+--------------------------------------------------------------------------------
+
+  1. Install MySQL (included with XAMPP) and start the MySQL service.
+
+  2. Create the database:
+        CREATE DATABASE eduima_db;
+
+  3. Run the schema file:
+        mysql -u root eduima_db < backend/database/schema.sql
+
+  4. Create backend/.env:
+        DB_HOST=localhost
+        DB_USER=root
+        DB_PASSWORD=
+        DB_NAME=eduima_db
+        JWT_SECRET=your-secret-key-here
+        PORT=5000
+        FRONTEND_URL=http://localhost:5173
+
+  5. Install backend dependencies:
+        cd backend && npm install
+
+  6. Start the backend server:
+        npm run dev
+
+  7. Install frontend dependencies:
+        cd frontend && npm install
+
+  8. Start the frontend dev server:
+        npm run dev
+
+  9. Open browser: http://localhost:5173
+
+  10. (Optional) Seed forum data:
+        cd backend && npm run seed:forum
+
+--------------------------------------------------------------------------------
+DEFAULT CREDENTIALS (development only)
+--------------------------------------------------------------------------------
+
+  Create a super_admin user directly via MySQL or the seeder script.
+  All seeded users are assigned a temporary password and will be forced
+  to change it on first login.
+
+================================================================================
+                         END OF PROJECT DETAILS
+================================================================================

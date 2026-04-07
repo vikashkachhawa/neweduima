@@ -1,0 +1,35 @@
+{
+  "name": "eduima-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for Eduima - Multi-tenant School Management System",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.6",
+    "@mui/material": "^7.3.6",
+    "@reduxjs/toolkit": "^2.11.2",
+    "axios": "^1.6.2",
+    "blockly": "^12.5.1",
+    "bulma": "^1.0.4",
+    "emoji-picker-react": "^4.18.0",
+    "framer-motion": "^12.23.26",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-easy-crop": "^5.5.7",
+    "react-redux": "^9.2.0",
+    "react-router-dom": "^6.20.1",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8"
+  }
+}

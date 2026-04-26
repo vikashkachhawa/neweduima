@@ -47,7 +47,8 @@ import {
     AdminPanelSettings as AdminPanelSettingsIcon,
     Menu as MenuIcon,
     Close as CloseIcon,
-    EmojiEvents as EmojiEventsIcon
+    EmojiEvents as EmojiEventsIcon,
+    Videocam as VideocamIcon
 } from '@mui/icons-material';
 
 const Sidebar = () => {
@@ -152,6 +153,7 @@ const Sidebar = () => {
         if (user?.role === 'super_admin') {
             links.push({ path: '/templates', icon: <MenuBookIcon />, label: 'Templates', permission: null });
             links.push({ path: '/subscriptions', icon: <PaymentIcon />, label: 'Subscriptions', permission: null });
+            links.push({ path: '/edumeet', icon: <VideocamIcon />, label: 'EduMeet', permission: null });
             links.push({ path: '/system-settings', icon: <SettingsIcon />, label: 'System Settings', permission: null });
             links.push({ path: '/security', icon: <SecurityIcon />, label: 'Security', permission: null });
         }
@@ -166,6 +168,7 @@ const Sidebar = () => {
             links.push({ path: '/forum', icon: <ForumIcon />, label: 'Forum', permission: null });
             links.push({ path: '/chat', icon: <ChatBubbleOutlineIcon />, label: 'Chat', permission: null, showChatUnread: true });
             links.push({ path: '/codearena', icon: <EmojiEventsIcon />, label: 'CodeArena', permission: null });
+            links.push({ path: '/edumeet', icon: <VideocamIcon />, label: 'EduMeet', permission: null });
         }
 
         // Faculty links
@@ -180,6 +183,7 @@ const Sidebar = () => {
             links.push({ path: '/forum', icon: <ForumIcon />, label: 'Forum', permission: null });
             links.push({ path: '/chat', icon: <ChatBubbleOutlineIcon />, label: 'Chat', permission: null, showChatUnread: true });
             links.push({ path: '/codearena', icon: <EmojiEventsIcon />, label: 'CodeArena', permission: null });
+            links.push({ path: '/edumeet', icon: <VideocamIcon />, label: 'EduMeet', permission: null });
         }
 
         // Student links
@@ -190,6 +194,7 @@ const Sidebar = () => {
             links.push({ path: '/forum', icon: <ForumIcon />, label: 'Forum', permission: null });
             links.push({ path: '/chat', icon: <ChatBubbleOutlineIcon />, label: 'Chat', permission: null, showChatUnread: true });
             links.push({ path: '/codearena', icon: <EmojiEventsIcon />, label: 'CodeArena', permission: null });
+            links.push({ path: '/edumeet', icon: <VideocamIcon />, label: 'EduMeet', permission: null });
         }
 
         return links;

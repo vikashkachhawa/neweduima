@@ -3,6 +3,15 @@ import School from '../models/School.js';
 
 const authMiddleware = async (req, res, next) => {
     try {
+        // Public endpoints that don't require auth
+        const publicPaths = ['/api/edumeet/ice-config', '/edumeet/ice-config'];
+        const isPublic = publicPaths.some(path => req.originalUrl.includes(path) || req.path === path);
+        
+        if (isPublic) {
+            console.log('Auth: Bypassing auth for public path:', req.path);
+            return next();
+        }
+
         const token = req.headers.authorization?.split(' ')[1];
 
         if (!token) {

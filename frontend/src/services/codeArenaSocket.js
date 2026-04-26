@@ -18,7 +18,7 @@
 import { io } from 'socket.io-client';
 
 // Backend WebSocket URL — uses same host as the API by default
-const WS_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const WS_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 /**
  * Create and return a new socket instance authenticated with the given JWT.
@@ -30,8 +30,12 @@ const WS_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 export function createExecutionSocket(token) {
   return io(`${WS_URL}/codearena`, {
     auth: { token },
+    path: '/socket.io/',
     transports: ['websocket', 'polling'],
-    reconnection: false,   // Manual reconnect on next "Run" click
-    timeout: 5000,
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: 3,
+    timeout: 10000,
   });
 }

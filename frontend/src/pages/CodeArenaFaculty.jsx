@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, IconButton, InputAdornment, InputLabel, LinearProgress, MenuItem, Paper, Select, Stack, Switch, Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Avatar, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, IconButton, InputAdornment, InputLabel, LinearProgress, List, ListItem, ListItemAvatar, ListItemButton, ListItemText, MenuItem, Paper, Select, Stack, Switch, Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 
 import Grid from '@mui/material/GridLegacy';
+import { useTheme } from '@mui/material/styles';
 import {
   Add,
   ArrowBack,
@@ -84,6 +85,23 @@ const ProblemDialog = ({ open, onClose, onSubmit, loading, initial = null }) => 
   const addTC = () => setTestCases((v) => [...v, { input_data: '', expected_output: '', is_hidden: false, time_limit_ms: 2000 }]);
   const removeTC = (i) => setTestCases((v) => v.filter((_, idx) => idx !== i));
 
+  const applySampleAsFirstTest = () => {
+    if (!form.sample_input.trim() && !form.sample_output.trim()) return;
+    setTestCases((prev) => {
+      const next = [...prev];
+      if (!next.length) {
+        return [{ input_data: form.sample_input, expected_output: form.sample_output, is_hidden: false, time_limit_ms: 2000 }];
+      }
+      next[0] = {
+        ...next[0],
+        input_data: form.sample_input,
+        expected_output: form.sample_output,
+        is_hidden: false,
+      };
+      return next;
+    });
+  };
+
   const handleSubmit = () => {
     if (!form.title.trim() || !form.description.trim()) return;
     onSubmit({ ...form, test_cases: testCases.filter((tc) => tc.input_data !== '' || tc.expected_output !== '') });
@@ -91,13 +109,18 @@ const ProblemDialog = ({ open, onClose, onSubmit, loading, initial = null }) => 
 
   return (
     <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{initial ? 'Edit Problem' : 'Add Problem'}</DialogTitle>
+      <DialogTitle>{initial ? 'Edit Coding Problem' : 'Create Coding Problem'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info" sx={{ py: 0.5 }}>
+            Teacher flow: 1) Write problem statement 2) Add sample input/output 3) Add evaluation test cases (one input line per input call).
+          </Alert>
+
+          <Typography variant="subtitle2" fontWeight={700}>Problem Statement</Typography>
           <Stack direction="row" spacing={2}>
-            <TextField label="Title *" value={form.title} onChange={set('title')} fullWidth size="small" />
+            <TextField label="Problem Title *" value={form.title} onChange={set('title')} fullWidth size="small" />
             <TextField
-              select label="Difficulty" value={form.difficulty} onChange={set('difficulty')} size="small" sx={{ minWidth: 140 }}
+              select label="Difficulty Level" value={form.difficulty} onChange={set('difficulty')} size="small" sx={{ minWidth: 160 }}
               SelectProps={{ native: true }}
             >
               <option value="basic">Basic</option>
@@ -106,11 +129,12 @@ const ProblemDialog = ({ open, onClose, onSubmit, loading, initial = null }) => 
             </TextField>
           </Stack>
 
-          <TextField label="Problem Description *" value={form.description} onChange={set('description')} fullWidth
+          <TextField label="Question Description *" value={form.description} onChange={set('description')} fullWidth
             multiline rows={4} size="small" />
-          <TextField label="Constraints" value={form.constraints} onChange={set('constraints')} fullWidth
+          <TextField label="Constraints (optional)" value={form.constraints} onChange={set('constraints')} fullWidth
             multiline rows={2} size="small" />
 
+          <Typography variant="subtitle2" fontWeight={700}>Student Sample (Visible)</Typography>
           <Stack direction="row" spacing={2}>
             <TextField label="Sample Input" value={form.sample_input} onChange={set('sample_input')} fullWidth
               multiline rows={2} size="small" inputProps={{ style: { fontFamily: 'monospace', fontSize: 12 } }} />
@@ -118,11 +142,20 @@ const ProblemDialog = ({ open, onClose, onSubmit, loading, initial = null }) => 
               multiline rows={2} size="small" inputProps={{ style: { fontFamily: 'monospace', fontSize: 12 } }} />
           </Stack>
 
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button size="small" variant="outlined" onClick={applySampleAsFirstTest} disabled={!form.sample_input.trim() && !form.sample_output.trim()}>
+              Use Sample as Test 1
+            </Button>
+          </Box>
+
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="subtitle2">Test Cases</Typography>
-              <Button size="small" startIcon={<Add />} onClick={addTC}>Add</Button>
+              <Typography variant="subtitle2" fontWeight={700}>Evaluation Test Cases</Typography>
+              <Button size="small" startIcon={<Add />} onClick={addTC}>Add Test Case</Button>
             </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Tip: Each test case is one full run. If code uses multiple input() calls, include all values in that single test case on separate lines.
+            </Typography>
             <Stack spacing={1}>
               {testCases.map((tc, i) => (
                 <Paper key={i} variant="outlined" sx={{ p: 1.5 }}>
@@ -131,7 +164,7 @@ const ProblemDialog = ({ open, onClose, onSubmit, loading, initial = null }) => 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <FormControlLabel
                         control={<Switch checked={tc.is_hidden} onChange={setTC(i, 'is_hidden')} size="small" />}
-                        label={<Typography variant="caption">Hidden</Typography>}
+                        label={<Typography variant="caption">Hidden (evaluation only)</Typography>}
                         sx={{ mr: 0 }}
                       />
                       <IconButton size="small" onClick={() => removeTC(i)} disabled={testCases.length === 1}>
@@ -140,7 +173,7 @@ const ProblemDialog = ({ open, onClose, onSubmit, loading, initial = null }) => 
                     </Box>
                   </Box>
                   <Stack direction="row" spacing={1}>
-                    <TextField label="Input" value={tc.input_data} onChange={setTC(i, 'input_data')} fullWidth
+                    <TextField label="Input (one line per value)" value={tc.input_data} onChange={setTC(i, 'input_data')} fullWidth
                       multiline rows={2} size="small" inputProps={{ style: { fontFamily: 'monospace', fontSize: 11 } }} />
                     <TextField label="Expected Output" value={tc.expected_output} onChange={setTC(i, 'expected_output')} fullWidth
                       multiline rows={2} size="small" inputProps={{ style: { fontFamily: 'monospace', fontSize: 11 } }} />
@@ -686,6 +719,9 @@ const CodeArenaFaculty = () => {
         {/* Problems tab */}
         {tab === 0 && (
           <Box>
+            <Alert severity="info" sx={{ mb: 1.5 }}>
+              Quick setup: Create problem, then add at least one evaluation test case, then invite students, then start room.
+            </Alert>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
               <Button
                 variant="contained"
@@ -693,7 +729,7 @@ const CodeArenaFaculty = () => {
                 onClick={() => { setEditingProblem(null); setProblemDialogOpen(true); }}
                 disabled={room.status === 'ended'}
               >
-                Add Problem
+                Create Problem
               </Button>
             </Box>
             <Stack spacing={1.5}>

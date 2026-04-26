@@ -43,6 +43,9 @@ import SchoolUserDetail from './pages/SchoolUserDetail';
 import CodeArena from './pages/CodeArena';
 import CodeArenaRoom from './pages/CodeArenaRoom';
 import CodeArenaFaculty from './pages/CodeArenaFaculty';
+import EduMeet from './pages/EduMeet';
+import EduMeetRoom from './pages/EduMeetRoom';
+import EduMeetPreJoin from './pages/EduMeetPreJoin';
 
 const getDefaultRouteByRole = (role) => {
     if (role === 'student') return '/student/profile';
@@ -469,6 +472,31 @@ function App() {
                             element={
                                 <ProtectedRoute allowedRoles={['faculty', 'school_admin']}>
                                     <CodeArenaFaculty />
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/edumeet"
+                            element={
+                                <ProtectedRoute allowedRoles={['faculty', 'school_admin', 'student', 'super_admin']}>
+                                    <EduMeet />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/edumeet/rooms/:roomId"
+                            element={
+                                <ProtectedRoute allowedRoles={['faculty', 'school_admin', 'student', 'super_admin']}>
+                                    <EduMeetRoom />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/edumeet/rooms/:roomId/prejoin"
+                            element={
+                                <ProtectedRoute allowedRoles={['faculty', 'school_admin', 'student', 'super_admin']}>
+                                    <EduMeetPreJoin />
                                 </ProtectedRoute>
                             }
                         />

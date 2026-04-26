@@ -1,0 +1,1360 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material';
+import Grid from '@mui/material/GridLegacy';
+import {
+  ArrowBack,
+  Chat,
+  Delete,
+  Download,
+  Draw,
+  EmojiEmotions,
+  FilePresent,
+  HowToReg,
+  Mic,
+  MicOff,
+  OpenInNew,
+  PanTool,
+  People,
+  PlayArrow,
+  Poll,
+  PushPin,
+  Refresh,
+  ScreenShare,
+  Send,
+  Stop,
+  StopScreenShare,
+  RadioButtonChecked,
+  VideoLibrary,
+  Videocam,
+  VideocamOff,
+  VolumeOff,
+} from '@mui/icons-material';
+import Layout from '../components/Layout';
+import { useAuth } from '../contexts/AuthContext';
+import eduMeetService from '../services/edumeet';
+import { createEduMeetSocket } from '../services/edumeetSocket';
+
+const TYPE_LABEL = {
+  one_to_one: 'One-to-One',
+  one_to_many: 'One-to-Many',
+  many_to_many: 'Many-to-Many',
+};
+
+const ROLE_COLOR = {
+  admin: 'error',
+  teacher: 'primary',
+  student: 'default',
+};
+
+const formatSeconds = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
+
+const drawStroke = (ctx, stroke) => {
+  if (!ctx || !stroke) return;
+  ctx.strokeStyle = stroke.color || '#0f172a';
+  ctx.lineWidth = stroke.width || 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(stroke.fromX * ctx.canvas.width, stroke.fromY * ctx.canvas.height);
+  ctx.lineTo(stroke.toX * ctx.canvas.width, stroke.toY * ctx.canvas.height);
+  ctx.stroke();
+};
+
+const WhiteboardCanvas = ({ events, canDraw, onDraw, onClear }) => {
+  const canvasRef = useRef(null);
+  const drawingRef = useRef(false);
+  const lastPointRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    events.forEach((event) => {
+      if (event.event_type === 'draw') drawStroke(ctx, event.payload || event.stroke);
+    });
+  }, [events]);
+
+  const getPoint = (event) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+    return {
+      x: (clientX - rect.left) / rect.width,
+      y: (clientY - rect.top) / rect.height,
+    };
+  };
+
+  const handleStart = (event) => {
+    if (!canDraw) return;
+    drawingRef.current = true;
+    lastPointRef.current = getPoint(event);
+  };
+
+  const handleMove = (event) => {
+    if (!canDraw || !drawingRef.current || !lastPointRef.current) return;
+    const nextPoint = getPoint(event);
+    const stroke = {
+      fromX: lastPointRef.current.x,
+      fromY: lastPointRef.current.y,
+      toX: nextPoint.x,
+      toY: nextPoint.y,
+      color: '#0f172a',
+      width: 2,
+    };
+    onDraw(stroke);
+    lastPointRef.current = nextPoint;
+  };
+
+  const handleEnd = () => {
+    drawingRef.current = false;
+    lastPointRef.current = null;
+  };
+
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+      <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="subtitle2" fontWeight={700}>Interactive Whiteboard</Typography>
+        <Button size="small" color="error" onClick={onClear} disabled={!canDraw}>Clear</Button>
+      </Box>
+      <Box sx={{ px: 1.5, pb: 1.5 }}>
+        <canvas
+          ref={canvasRef}
+          width={960}
+          height={420}
+          style={{ width: '100%', height: 420, background: '#ffffff', borderRadius: 12, touchAction: 'none', cursor: canDraw ? 'crosshair' : 'not-allowed' }}
+          onMouseDown={handleStart}
+          onMouseMove={handleMove}
+          onMouseUp={handleEnd}
+          onMouseLeave={handleEnd}
+          onTouchStart={handleStart}
+          onTouchMove={handleMove}
+          onTouchEnd={handleEnd}
+        />
+      </Box>
+    </Paper>
+  );
+};
+
+const PollDialog = ({ open, onClose, onSubmit, loading }) => {
+  const [question, setQuestion] = useState('');
+  const [options, setOptions] = useState(['', '']);
+
+  useEffect(() => {
+    if (open) {
+      setQuestion('');
+      setOptions(['', '']);
+    }
+  }, [open]);
+
+  const setOption = (index, value) => {
+    setOptions((current) => current.map((item, idx) => (idx === index ? value : item)));
+  };
+
+  return (
+    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Create Live Poll</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField label="Question" value={question} onChange={(event) => setQuestion(event.target.value)} size="small" fullWidth />
+          {options.map((option, index) => (
+            <TextField key={index} label={`Option ${index + 1}`} value={option} onChange={(event) => setOption(index, event.target.value)} size="small" fullWidth />
+          ))}
+          <Button size="small" onClick={() => setOptions((current) => [...current, ''])}>Add Option</Button>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button
+          onClick={() => onSubmit({ question, options: options.filter((item) => item.trim()) })}
+          variant="contained"
+          disabled={loading || !question.trim() || options.filter((item) => item.trim()).length < 2}
+        >
+          {loading ? <CircularProgress size={18} /> : 'Create Poll'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const FileDialog = ({ open, onClose, onSubmit, loading }) => {
+  const [form, setForm] = useState({ title: '', file_type: 'link', file_url: '' });
+
+  useEffect(() => {
+    if (open) setForm({ title: '', file_type: 'link', file_url: '' });
+  }, [open]);
+
+  return (
+    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Share Learning Resource</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField label="Resource Title" value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} size="small" fullWidth />
+          <TextField select label="Type" value={form.file_type} onChange={(event) => setForm((current) => ({ ...current, file_type: event.target.value }))} size="small" fullWidth>
+            <MenuItem value="link">Link</MenuItem>
+            <MenuItem value="pdf">PDF</MenuItem>
+            <MenuItem value="image">Image</MenuItem>
+            <MenuItem value="notes">Notes</MenuItem>
+          </TextField>
+          <TextField label="URL" value={form.file_url} onChange={(event) => setForm((current) => ({ ...current, file_url: event.target.value }))} size="small" fullWidth />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button onClick={() => onSubmit(form)} variant="contained" disabled={loading || !form.title.trim() || !form.file_url.trim()}>
+          {loading ? <CircularProgress size={18} /> : 'Share'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const RemoteVideoTile = React.memo(({ participant, stream }) => {
+  const tileRef = useRef(null);
+  useEffect(() => {
+    if (tileRef.current) tileRef.current.srcObject = stream || null;
+  }, [stream]);
+  return (
+    <Paper
+      sx={{
+        borderRadius: 3,
+        overflow: 'hidden',
+        bgcolor: participant.spotlighted ? 'rgba(168,85,247,0.18)' : 'rgba(15,23,42,0.72)',
+        border: participant.spotlighted ? '1px solid rgba(216,180,254,0.4)' : '1px solid rgba(148,163,184,0.12)',
+      }}
+    >
+      {stream ? (
+        <video ref={tileRef} autoPlay playsInline style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block', background: '#000' }} />
+      ) : (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ p: 1.25 }}>
+          <Avatar sx={{ width: 34, height: 34 }}>{participant.first_name?.[0]}{participant.last_name?.[0]}</Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" fontWeight={700} noWrap sx={{ color: '#f8fafc' }}>{participant.first_name} {participant.last_name}</Typography>
+            <Typography variant="caption" sx={{ color: '#94a3b8' }}>{participant.mic_enabled ? 'Mic on' : 'Muted'} • {participant.camera_enabled ? 'Cam on' : 'Cam off'}</Typography>
+          </Box>
+        </Stack>
+      )}
+      {stream && (
+        <Box sx={{ px: 1, pb: 0.5 }}>
+          <Typography variant="caption" fontWeight={700} noWrap sx={{ color: '#f8fafc' }}>{participant.first_name} {participant.last_name}</Typography>
+        </Box>
+      )}
+    </Paper>
+  );
+});
+
+const EduMeetRoom = () => {
+  const { roomId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isManager = ['faculty', 'school_admin', 'super_admin'].includes(user?.role);
+  const socketRef = useRef(null);
+  const videoRef = useRef(null);
+  const [room, setRoom] = useState(null);
+  const [participants, setParticipants] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [polls, setPolls] = useState([]);
+  const [files, setFiles] = useState([]);
+  const [recordings, setRecordings] = useState([]);
+  const [whiteboardEvents, setWhiteboardEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [sideTab, setSideTab] = useState(0);
+  const [mainTab, setMainTab] = useState(0);
+  const [messageText, setMessageText] = useState('');
+  const [recipientId, setRecipientId] = useState('');
+  const [pollOpen, setPollOpen] = useState(false);
+  const [fileOpen, setFileOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [cameraOn, setCameraOn] = useState(true);
+  const [micOn, setMicOn] = useState(true);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const [handRaised, setHandRaised] = useState(false);
+  const [qualityMode, setQualityMode] = useState('high');
+  const [audioInputDevices, setAudioInputDevices] = useState([]);
+  const [selectedAudioDevice, setSelectedAudioDevice] = useState('');
+  const [localStream, setLocalStream] = useState(null);
+  const [mediaError, setMediaError] = useState('');
+  const [reactions, setReactions] = useState([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  const [recordingStatus, setRecordingStatus] = useState('');
+  const [liveRecordingInfo, setLiveRecordingInfo] = useState(null);
+  const [remoteStreams, setRemoteStreams] = useState({});
+  const [chatPopped, setChatPopped] = useState(false);
+  const [chatPos, setChatPos] = useState(() => ({ x: Math.max(20, window.innerWidth - 390), y: 80 }));
+  const peersRef = useRef({});
+  const localStreamRef = useRef(null);
+  const recorderRef = useRef(null);
+  const recordingChunksRef = useRef([]);
+  const recordingStreamRef = useRef(null);
+  const recordingStartedAtRef = useRef(null);
+
+  const spotlightParticipant = useMemo(
+    () => participants.find((participant) => participant.spotlighted) || participants.find((participant) => participant.role === 'teacher') || participants[0],
+    [participants]
+  );
+
+  const createPeerConnection = useCallback((userId) => {
+    if (peersRef.current[userId]) return peersRef.current[userId];
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
+    });
+    const stream = localStreamRef.current;
+    if (stream) stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current) {
+        socketRef.current.emit('webrtc:ice-candidate', { roomId, toUserId: userId, candidate: event.candidate.toJSON() });
+      }
+    };
+
+    const remoteStream = new MediaStream();
+    pc.ontrack = (event) => {
+      event.streams[0]?.getTracks().forEach((track) => remoteStream.addTrack(track));
+      setRemoteStreams((prev) => ({ ...prev, [userId]: remoteStream }));
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        pc.close();
+        delete peersRef.current[userId];
+        setRemoteStreams((prev) => { const next = { ...prev }; delete next[userId]; return next; });
+      }
+    };
+
+    peersRef.current[userId] = pc;
+    return pc;
+  }, [roomId]);
+
+  const loadRoom = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await eduMeetService.getRoom(roomId);
+      setRoom(data.room);
+      setParticipants(data.participants || []);
+      setMessages(data.messages || []);
+      setPolls(data.polls || []);
+      setFiles(data.files || []);
+      setRecordings(data.recordings || []);
+      setWhiteboardEvents(data.whiteboard_events || []);
+      setError('');
+    } catch (loadError) {
+      const message = loadError?.response?.data?.message || 'Failed to load EduMeet room';
+      if (message === 'Join the room first') {
+        try {
+          await eduMeetService.joinRoom(roomId);
+          const data = await eduMeetService.getRoom(roomId);
+          setRoom(data.room);
+          setParticipants(data.participants || []);
+          setMessages(data.messages || []);
+          setPolls(data.polls || []);
+          setFiles(data.files || []);
+          setRecordings(data.recordings || []);
+          setWhiteboardEvents(data.whiteboard_events || []);
+          setError('');
+        } catch (joinError) {
+          setError(joinError?.response?.data?.message || message);
+        }
+      } else {
+        setError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    loadRoom();
+  }, [loadRoom]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token || !roomId) return undefined;
+
+    const socket = createEduMeetSocket(token);
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('meeting:join', { roomId });
+    });
+    socket.on('participant:presence', (nextParticipants) => setParticipants(nextParticipants));
+    socket.on('chat:message', (message) => {
+      setMessages((current) => (current.some((item) => item.id === message.id) ? current : [...current, message]));
+    });
+    socket.on('reaction:received', (reaction) => {
+      setReactions((current) => [...current, { ...reaction, id: `${reaction.userId}-${reaction.createdAt}` }]);
+      window.setTimeout(() => {
+        setReactions((current) => current.filter((item) => item.id !== `${reaction.userId}-${reaction.createdAt}`));
+      }, 2200);
+    });
+    socket.on('whiteboard:draw', ({ stroke }) => {
+      setWhiteboardEvents((current) => [...current, { event_type: 'draw', payload: stroke }]);
+    });
+    socket.on('whiteboard:clear', () => setWhiteboardEvents([]));
+    socket.on('recording:status', (payload) => {
+      setLiveRecordingInfo(payload?.active ? payload : null);
+      if (payload?.active) {
+        setSuccess(`${payload.firstName || 'Teacher'} started recording.`);
+      } else {
+        setSuccess(`${payload?.firstName || 'Teacher'} stopped recording.`);
+      }
+    });
+
+    socket.on('webrtc:new-peer', async ({ userId: peerId }) => {
+      const pc = createPeerConnection(peerId);
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('webrtc:offer', { roomId, toUserId: peerId, offer });
+      } catch {
+        // negotiation failed
+      }
+    });
+
+    socket.on('webrtc:existing-peers', (peers) => {
+      peers.forEach(({ userId: peerId }) => {
+        if (!peersRef.current[peerId]) createPeerConnection(peerId);
+      });
+    });
+
+    socket.on('webrtc:offer', async ({ fromUserId, offer }) => {
+      let pc = peersRef.current[fromUserId];
+      if (!pc) pc = createPeerConnection(fromUserId);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc:answer', { roomId, toUserId: fromUserId, answer });
+      } catch {
+        // answer failed
+      }
+    });
+
+    socket.on('webrtc:answer', async ({ fromUserId, answer }) => {
+      const pc = peersRef.current[fromUserId];
+      if (pc) {
+        try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); } catch { /* ignore stale */ }
+      }
+    });
+
+    socket.on('webrtc:ice-candidate', async ({ fromUserId, candidate }) => {
+      const pc = peersRef.current[fromUserId];
+      if (pc && candidate) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch { /* ignore */ }
+      }
+    });
+
+    socket.on('webrtc:peer-left', ({ userId: peerId }) => {
+      const pc = peersRef.current[peerId];
+      if (pc) {
+        pc.close();
+        delete peersRef.current[peerId];
+        setRemoteStreams((prev) => { const next = { ...prev }; delete next[peerId]; return next; });
+      }
+    });
+
+    socket.on('meeting:error', ({ message }) => setError(message || 'Meeting error'));
+
+    return () => {
+      socket.emit('meeting:leave', { roomId });
+      socket.disconnect();
+      socketRef.current = null;
+      Object.values(peersRef.current).forEach((pc) => pc.close());
+      peersRef.current = {};
+    };
+  }, [roomId, createPeerConnection]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDevices = async () => {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) return;
+        const inputs = devices.filter((device) => device.kind === 'audioinput');
+        setAudioInputDevices(inputs);
+        if (!selectedAudioDevice && inputs[0]) {
+          setSelectedAudioDevice(inputs[0].label || inputs[0].deviceId);
+        }
+      } catch {
+        // ignore device enumeration failures
+      }
+    };
+    loadDevices();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAudioDevice]);
+
+  useEffect(() => {
+    let disposed = false;
+    const updateMedia = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) return;
+      if (!cameraOn && !micOn) {
+        localStreamRef.current = null;
+        setLocalStream((current) => {
+          current?.getTracks().forEach((track) => track.stop());
+          return null;
+        });
+        if (videoRef.current) videoRef.current.srcObject = null;
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: micOn,
+          video: cameraOn ? { width: qualityMode === 'high' ? 1280 : 640, height: qualityMode === 'high' ? 720 : 360 } : false,
+        });
+        if (disposed) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        setMediaError('');
+        localStreamRef.current = stream;
+        setLocalStream((current) => {
+          current?.getTracks().forEach((track) => track.stop());
+          return stream;
+        });
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        // Update tracks in any existing peer connections
+        Object.entries(peersRef.current).forEach(([, pc]) => {
+          if (pc.signalingState !== 'closed') {
+            stream.getTracks().forEach((track) => {
+              const sender = pc.getSenders().find((s) => s.track?.kind === track.kind);
+              if (sender) sender.replaceTrack(track).catch(() => {});
+              else pc.addTrack(track, stream);
+            });
+          }
+        });
+      } catch (streamError) {
+        setMediaError(streamError?.message || 'Unable to access microphone or camera');
+      }
+    };
+
+    updateMedia();
+    return () => {
+      disposed = true;
+    };
+  }, [cameraOn, micOn, qualityMode]);
+
+  useEffect(() => () => {
+    localStream?.getTracks().forEach((track) => track.stop());
+  }, [localStream]);
+
+  useEffect(() => {
+    if (!isRecording || !recordingStartedAtRef.current) return undefined;
+    const timer = window.setInterval(() => {
+      setRecordingElapsed(Math.floor((Date.now() - recordingStartedAtRef.current) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isRecording]);
+
+  useEffect(() => {
+    if (!socketRef.current || !roomId) return;
+    socketRef.current.emit('media:update', {
+      roomId,
+      micEnabled: micOn,
+      cameraEnabled: cameraOn,
+      lowBandwidthMode: room?.low_bandwidth_mode || qualityMode === 'low',
+      audioDeviceLabel: selectedAudioDevice,
+      videoQuality: qualityMode,
+    });
+  }, [roomId, micOn, cameraOn, qualityMode, selectedAudioDevice, room?.low_bandwidth_mode]);
+
+  const sendReaction = (emoji) => {
+    socketRef.current?.emit('reaction:send', { roomId, emoji });
+  };
+
+  const toggleHand = () => {
+    const next = !handRaised;
+    setHandRaised(next);
+    socketRef.current?.emit('hand:toggle', { roomId, raised: next });
+  };
+
+  const handleWhiteboardDraw = (stroke) => {
+    setWhiteboardEvents((current) => [...current, { event_type: 'draw', payload: stroke }]);
+    socketRef.current?.emit('whiteboard:draw', { roomId, stroke });
+  };
+
+  const handleWhiteboardClear = () => {
+    setWhiteboardEvents([]);
+    socketRef.current?.emit('whiteboard:clear', { roomId });
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim()) return;
+    const payload = { content: messageText.trim(), recipient_id: recipientId || null };
+    try {
+      if (socketRef.current) {
+        socketRef.current.emit('chat:send', { roomId, content: payload.content, recipientId: payload.recipient_id || null });
+      } else {
+        const response = await eduMeetService.sendMessage(roomId, payload);
+        if (response.message) {
+          setMessages((current) => [...current, response.message]);
+        }
+      }
+      setMessageText('');
+    } catch (sendError) {
+      setError(sendError?.response?.data?.message || 'Failed to send message');
+    }
+  };
+
+  const handleToggleScreenShare = async () => {
+    if (screenSharing) {
+      setScreenSharing(false);
+      return;
+    }
+    try {
+      if (navigator.mediaDevices?.getDisplayMedia) {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        stream.getTracks().forEach((track) => {
+          track.onended = () => setScreenSharing(false);
+        });
+        setScreenSharing(true);
+      }
+    } catch (screenError) {
+      setError(screenError?.message || 'Screen share could not be started');
+    }
+  };
+
+  const refreshDashboardData = async () => {
+    try {
+      const [participantData, pollData, fileData, recordingData] = await Promise.all([
+        eduMeetService.getParticipants(roomId),
+        eduMeetService.getPolls(roomId),
+        eduMeetService.listFiles(roomId),
+        eduMeetService.listRecordings(roomId),
+      ]);
+      setParticipants(participantData);
+      setPolls(pollData);
+      setFiles(fileData);
+      setRecordings(recordingData);
+    } catch {
+      // leave current state in place
+    }
+  };
+
+  const stopTracks = (stream) => {
+    stream?.getTracks().forEach((track) => track.stop());
+  };
+
+  const uploadRecordingBlob = async (blob) => {
+    if (!blob || blob.size === 0) return;
+    try {
+      setRecordingStatus('Uploading recording...');
+      const durationSeconds = Math.max(1, Math.floor((Date.now() - recordingStartedAtRef.current) / 1000));
+      const title = `${room?.title ?? 'Recording'} ${new Date().toLocaleString()}`;
+      const data = await eduMeetService.uploadRecording(roomId, blob, {
+        title,
+        durationSeconds,
+        mimeType: blob.type || 'video/webm',
+      });
+      setRecordings((current) => [data.recording, ...current]);
+      setSuccess('Recording saved. Playback will auto-delete after 24 hours.');
+    } catch (uploadError) {
+      setError(uploadError?.response?.data?.message || uploadError?.message || 'Failed to upload recording');
+    } finally {
+      setRecordingStatus('');
+      recordingStartedAtRef.current = null;
+      setRecordingElapsed(0);
+    }
+  };
+
+  const stopRecording = useCallback(async () => {
+    if (!recorderRef.current) return;
+
+    const recorder = recorderRef.current;
+    recorderRef.current = null;
+    setIsRecording(false);
+    socketRef.current?.emit('recording:status', { roomId, active: false, title: room?.title ?? '' });
+
+    await new Promise((resolve) => {
+      recorder.onstop = async () => {
+        const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || 'video/webm' });
+        recordingChunksRef.current = [];
+        stopTracks(recordingStreamRef.current);
+        recordingStreamRef.current = null;
+        await uploadRecordingBlob(blob);
+        resolve();
+      };
+      recorder.stop();
+    });
+  }, [room?.title, roomId]);
+
+  const startRecording = async () => {
+    if (!isManager || !room.recording_enabled) {
+      setError('Enable recording for this session to start capturing.');
+      return;
+    }
+
+    if (!window.MediaRecorder || !navigator.mediaDevices?.getDisplayMedia) {
+      setError('This browser does not support session recording.');
+      return;
+    }
+
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+
+      const tracks = [...displayStream.getVideoTracks()];
+      const displayAudioTracks = displayStream.getAudioTracks();
+      if (displayAudioTracks.length) {
+        tracks.push(...displayAudioTracks);
+      } else if (micOn && localStream?.getAudioTracks()?.length) {
+        tracks.push(localStream.getAudioTracks()[0]);
+      }
+
+      const recordingStream = new MediaStream(tracks);
+      const recorder = new MediaRecorder(recordingStream, { mimeType: 'video/webm' });
+      recordingChunksRef.current = [];
+      recordingStreamRef.current = recordingStream;
+      recordingStartedAtRef.current = Date.now();
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size) recordingChunksRef.current.push(event.data);
+      };
+      displayStream.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          if (recorderRef.current) {
+            stopRecording();
+          }
+        };
+      });
+
+      recorder.start(1000);
+      recorderRef.current = recorder;
+      setRecordingStatus('Recording in progress');
+      setIsRecording(true);
+      socketRef.current?.emit('recording:status', { roomId, active: true, title: room?.title ?? '' });
+      setSuccess('Recording started. Stop it when the class is finished.');
+    } catch (recordError) {
+      setError(recordError?.message || 'Failed to start recording');
+    }
+  };
+
+  const startChatDrag = (e) => {
+    const origX = chatPos.x;
+    const origY = chatPos.y;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const move = (me) => {
+      setChatPos({
+        x: Math.max(0, Math.min(window.innerWidth - 360, origX + (me.clientX - startX))),
+        y: Math.max(0, Math.min(window.innerHeight - 60, origY + (me.clientY - startY))),
+      });
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  const handleDownloadRecording = async (recording) => {
+    try {
+      await eduMeetService.downloadRecording(recording.id, `${recording.title || 'edumeet-recording'}.webm`);
+    } catch (downloadError) {
+      setError(downloadError?.response?.data?.message || downloadError?.message || 'Failed to download recording');
+    }
+  };
+
+  const handleManagerAction = async (action) => {
+    try {
+      setActionLoading(true);
+      if (action === 'mute-all') await eduMeetService.muteAllParticipants(roomId);
+      if (action === 'attendance') await eduMeetService.markAttendance(roomId);
+      if (action === 'start') await eduMeetService.startRoom(roomId);
+      if (action === 'end') await eduMeetService.endRoom(roomId);
+      await loadRoom();
+      setSuccess('Session updated.');
+    } catch (actionError) {
+      setError(actionError?.response?.data?.message || 'Failed to update session');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSpotlight = async (targetUserId) => {
+    try {
+      await eduMeetService.spotlightParticipant(roomId, targetUserId);
+      await refreshDashboardData();
+    } catch (spotlightError) {
+      setError(spotlightError?.response?.data?.message || 'Failed to spotlight participant');
+    }
+  };
+
+  const handleRemoveParticipant = async (targetUserId) => {
+    try {
+      await eduMeetService.removeParticipant(roomId, targetUserId);
+      await refreshDashboardData();
+    } catch (removeError) {
+      setError(removeError?.response?.data?.message || 'Failed to remove participant');
+    }
+  };
+
+  const handleCreatePoll = async ({ question, options }) => {
+    try {
+      setActionLoading(true);
+      const data = await eduMeetService.createPoll(roomId, { question, options });
+      setPolls((current) => [data.poll, ...current.filter((item) => item.id !== data.poll.id)]);
+      setPollOpen(false);
+    } catch (pollError) {
+      setError(pollError?.response?.data?.message || 'Failed to create poll');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRespondToPoll = async (pollId, selectedOption) => {
+    try {
+      const data = await eduMeetService.respondToPoll(pollId, selectedOption);
+      setPolls((current) => current.map((poll) => (poll.id === pollId ? data.poll : poll)));
+    } catch (pollError) {
+      setError(pollError?.response?.data?.message || 'Failed to submit poll response');
+    }
+  };
+
+  const handleShareFile = async (payload) => {
+    try {
+      setActionLoading(true);
+      const data = await eduMeetService.shareFile(roomId, payload);
+      setFiles(data.files || []);
+      setFileOpen(false);
+    } catch (fileError) {
+      setError(fileError?.response?.data?.message || 'Failed to share file');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+          <CircularProgress />
+        </Box>
+      </Layout>
+    );
+  }
+
+  if (!room) {
+    return (
+      <Layout>
+        <Alert severity="error" sx={{ mb: 2 }}>{error || 'EduMeet room not found'}</Alert>
+        <Button startIcon={<ArrowBack />} onClick={() => navigate('/edumeet')}>Back to EduMeet</Button>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout disablePadding>
+      <Box sx={{ minHeight: '100vh', bgcolor: '#0f172a', color: '#e2e8f0', p: { xs: 2, md: 3 }, pb: 12 }}>
+        <Stack direction={{ xs: 'column', lg: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', lg: 'center' }} spacing={2} sx={{ mb: 2 }}>
+          <Box>
+            <Button startIcon={<ArrowBack />} onClick={() => navigate('/edumeet')} sx={{ mb: 1, color: '#cbd5e1' }}>Back to EduMeet</Button>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Typography variant="h4" fontWeight={800} sx={{ color: '#f8fafc' }}>{room.title}</Typography>
+              <Chip label={room.status} size="small" color={room.status === 'live' ? 'success' : room.status === 'scheduled' ? 'info' : 'default'} />
+              <Chip label={TYPE_LABEL[room.conference_type] || 'Session'} size="small" variant="outlined" sx={{ color: '#cbd5e1', borderColor: 'rgba(255,255,255,0.2)' }} />
+              <Chip label={room.primary_language === 'bilingual' ? 'EN + HI' : room.primary_language.toUpperCase()} size="small" variant="outlined" sx={{ color: '#cbd5e1', borderColor: 'rgba(255,255,255,0.2)' }} />
+            </Stack>
+            <Typography sx={{ mt: 0.5, color: '#94a3b8' }}>{room.description || 'Interactive virtual classroom for teaching, mentoring, and collaboration.'}</Typography>
+            <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
+              <Chip label={`Code: ${room.room_code}`} size="small" sx={{ bgcolor: 'rgba(59,130,246,0.12)', color: '#bfdbfe' }} />
+              <Chip label={`${participants.length} participants`} size="small" sx={{ bgcolor: 'rgba(148,163,184,0.12)', color: '#cbd5e1' }} />
+              <Chip label={room.low_bandwidth_mode ? 'Low bandwidth enabled' : 'High quality enabled'} size="small" sx={{ bgcolor: 'rgba(148,163,184,0.12)', color: '#cbd5e1' }} />
+              {liveRecordingInfo?.active && <Chip label={`Recording live by ${liveRecordingInfo.firstName || 'teacher'}`} size="small" color="error" icon={<RadioButtonChecked />} />}
+            </Stack>
+          </Box>
+        </Stack>
+
+        {error && <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>{error}</Alert>}
+        {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 2 }}>{success}</Alert>}
+        {mediaError && <Alert severity="warning" onClose={() => setMediaError('')} sx={{ mb: 2 }}>{mediaError}</Alert>}
+        {recordingStatus && <Alert severity="info" sx={{ mb: 2 }}>{recordingStatus}</Alert>}
+        {room.recording_enabled && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Session recordings remain available for playback for 24 hours, then they are deleted automatically from the server.
+          </Alert>
+        )}
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} lg={8}>
+            <Stack spacing={2}>
+              <Paper sx={{ borderRadius: 4, overflow: 'hidden', bgcolor: '#111827', border: '1px solid rgba(148,163,184,0.15)' }}>
+                <Box sx={{ p: 2, borderBottom: '1px solid rgba(148,163,184,0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#f8fafc' }}>Meeting Stage</Typography>
+                    {spotlightParticipant && <Chip label={`${spotlightParticipant.first_name} ${spotlightParticipant.last_name}`} size="small" color="secondary" />}
+                    {spotlightParticipant?.hand_raised && <Chip label="Hand raised" size="small" color="warning" />}
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                      <InputLabel sx={{ color: '#94a3b8' }}>Audio</InputLabel>
+                      <Select value={selectedAudioDevice} label="Audio" onChange={(event) => setSelectedAudioDevice(event.target.value)} sx={{ color: '#e2e8f0', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(148,163,184,0.2)' } }}>
+                        {audioInputDevices.map((device) => (
+                          <MenuItem key={device.deviceId} value={device.label || device.deviceId}>{device.label || 'Microphone'}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                      <InputLabel sx={{ color: '#94a3b8' }}>Quality</InputLabel>
+                      <Select value={qualityMode} label="Quality" onChange={(event) => setQualityMode(event.target.value)} sx={{ color: '#e2e8f0', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(148,163,184,0.2)' } }}>
+                        <MenuItem value="high">High quality</MenuItem>
+                        <MenuItem value="low">Low bandwidth</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </Box>
+
+                {mainTab === 0 && (
+                  <Box sx={{ p: 2 }}>
+                    <Box sx={{ position: 'relative', minHeight: { xs: 320, md: 520 }, borderRadius: 4, overflow: 'hidden', bgcolor: '#020617', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {cameraOn ? (
+                        <video ref={videoRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', minHeight: 320 }} />
+                      ) : (
+                        <Stack alignItems="center" spacing={1.5}>
+                          <VideocamOff sx={{ color: '#fff', fontSize: 52 }} />
+                          <Typography sx={{ color: '#cbd5e1' }}>Camera preview off</Typography>
+                        </Stack>
+                      )}
+                      <Box sx={{ position: 'absolute', left: 16, bottom: 16, right: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 2, flexWrap: 'wrap' }}>
+                        <Box sx={{ px: 1.5, py: 1, borderRadius: 3, bgcolor: 'rgba(15,23,42,0.72)', backdropFilter: 'blur(10px)' }}>
+                          <Typography fontWeight={700} sx={{ color: '#f8fafc' }}>
+                            {spotlightParticipant ? `${spotlightParticipant.first_name} ${spotlightParticipant.last_name}` : 'Waiting for participants'}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#cbd5e1' }}>
+                            {spotlightParticipant ? `${spotlightParticipant.role} • ${spotlightParticipant.mic_enabled ? 'Mic on' : 'Muted'} • ${spotlightParticipant.camera_enabled ? 'Camera on' : 'Camera off'}` : 'Stage view'}
+                          </Typography>
+                        </Box>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                          {['👍', '👏', '🎉', '❤️'].map((emoji) => (
+                            <Button key={emoji} variant="contained" onClick={() => sendReaction(emoji)} sx={{ minWidth: 48, bgcolor: 'rgba(15,23,42,0.72)', '&:hover': { bgcolor: 'rgba(30,41,59,0.9)' } }}>
+                              {emoji}
+                            </Button>
+                          ))}
+                        </Stack>
+                      </Box>
+                    </Box>
+
+                    <Box sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5 }}>
+                      {participants.slice(0, 8).map((participant) => (
+                        String(participant.user_id) === String(user?.id) ? (
+                          <Paper key={participant.user_id} sx={{ p: 1.25, borderRadius: 3, bgcolor: 'rgba(59,130,246,0.18)', border: '1px solid rgba(147,197,253,0.3)' }}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.main' }}>{participant.first_name?.[0]}{participant.last_name?.[0]}</Avatar>
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" fontWeight={700} noWrap sx={{ color: '#f8fafc' }}>{participant.first_name} (You)</Typography>
+                                <Typography variant="caption" sx={{ color: '#94a3b8' }}>{micOn ? 'Mic on' : 'Muted'} • {cameraOn ? 'Cam on' : 'Cam off'}</Typography>
+                              </Box>
+                            </Stack>
+                          </Paper>
+                        ) : (
+                          <RemoteVideoTile key={participant.user_id} participant={participant} stream={remoteStreams[participant.user_id] || null} />
+                        )
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+
+                {mainTab === 1 && (
+                  <Box sx={{ p: 2 }}>
+                    <WhiteboardCanvas events={whiteboardEvents} canDraw={isManager} onDraw={handleWhiteboardDraw} onClear={handleWhiteboardClear} />
+                  </Box>
+                )}
+              </Paper>
+
+              <Paper sx={{ borderRadius: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(148,163,184,0.12)', p: 1 }}>
+                <Tabs value={mainTab} onChange={(_, value) => setMainTab(value)} sx={{ '.MuiTab-root': { color: '#94a3b8' }, '.Mui-selected': { color: '#f8fafc !important' } }}>
+                  <Tab label="Stage" />
+                  <Tab label="Whiteboard" />
+                </Tabs>
+              </Paper>
+            </Stack>
+          </Grid>
+
+          <Grid item xs={12} lg={4}>
+            <Paper sx={{ borderRadius: 4, p: 2, minHeight: 720, bgcolor: '#f8fafc' }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                <Typography variant="h6" fontWeight={800}>Meeting Panel</Typography>
+                <Button size="small" startIcon={<Refresh />} onClick={refreshDashboardData}>Refresh</Button>
+              </Stack>
+              <Tabs value={sideTab} onChange={(_, value) => setSideTab(value)} variant="scrollable" allowScrollButtonsMobile sx={{ mb: 2 }}>
+                <Tab icon={<Chat />} label="Chat" />
+                <Tab icon={<People />} label="Participants" />
+                <Tab icon={<Poll />} label="Polls" />
+                <Tab icon={<FilePresent />} label="Files" />
+                <Tab icon={<VideoLibrary />} label="Recordings" />
+              </Tabs>
+
+              {sideTab === 0 && (
+                <>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+                    <Tooltip title={chatPopped ? 'Dock chat' : 'Pop out chat'}>
+                      <IconButton size="small" onClick={() => setChatPopped((v) => !v)}>
+                        <OpenInNew sx={{ fontSize: 16, transform: chatPopped ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  {chatPopped ? (
+                    <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                      <OpenInNew sx={{ fontSize: 40, mb: 1, opacity: 0.35 }} />
+                      <Typography variant="body2">Chat is open in a floating window.</Typography>
+                      <Button size="small" sx={{ mt: 1 }} onClick={() => setChatPopped(false)}>Dock back</Button>
+                    </Box>
+                  ) : (
+                    <>
+                  <FormControl size="small" fullWidth sx={{ mb: 2 }} disabled={!room.allow_private_chat}>
+                    <InputLabel>Message Scope</InputLabel>
+                    <Select value={recipientId} label="Message Scope" onChange={(event) => setRecipientId(event.target.value)}>
+                      <MenuItem value="">Public chat</MenuItem>
+                      {participants.filter((participant) => String(participant.user_id) !== String(user?.id)).map((participant) => (
+                        <MenuItem key={participant.user_id} value={participant.user_id}>Private to {participant.first_name} {participant.last_name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <List sx={{ maxHeight: 470, overflowY: 'auto', mb: 2 }}>
+                    {messages.map((message) => (
+                      <ListItem key={message.id} alignItems="flex-start" disableGutters>
+                        <ListItemAvatar>
+                          <Avatar>{message.sender_first_name?.[0]}{message.sender_last_name?.[0]}</Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                              <Typography variant="body2" fontWeight={700}>{message.sender_first_name} {message.sender_last_name}</Typography>
+                              {message.recipient_id ? <Chip label={`Private to ${message.recipient_first_name || 'participant'}`} size="small" color="secondary" /> : null}
+                            </Stack>
+                          }
+                          secondary={<>
+                            <Typography variant="body2" sx={{ mt: 0.5 }}>{message.content}</Typography>
+                            <Typography variant="caption" color="text.secondary">{new Date(message.created_at).toLocaleTimeString()}</Typography>
+                          </>}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <TextField
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    placeholder="Send a classroom message"
+                    fullWidth
+                    size="small"
+                    multiline
+                    maxRows={4}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={handleSendMessage} color="primary">
+                            <Send />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                    </>
+                  )}
+                </>
+              )}
+
+              {sideTab === 1 && (
+                <Stack spacing={1.25}>
+                  {participants.map((participant) => (
+                    <Paper key={participant.user_id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Avatar>{participant.first_name?.[0]}{participant.last_name?.[0]}</Avatar>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={700} noWrap>{participant.first_name} {participant.last_name}</Typography>
+                          <Typography variant="caption" color="text.secondary">{participant.role} | {participant.status}</Typography>
+                        </Box>
+                        {participant.hand_raised ? <PanTool sx={{ color: 'warning.main', fontSize: 18 }} /> : null}
+                      </Stack>
+                      {isManager && participant.role === 'student' && (
+                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                          <Button size="small" variant="outlined" onClick={() => handleSpotlight(participant.user_id)} startIcon={<PushPin />}>
+                            Spotlight
+                          </Button>
+                          <Button size="small" color="error" variant="outlined" onClick={() => handleRemoveParticipant(participant.user_id)} startIcon={<Delete />}>
+                            Remove
+                          </Button>
+                        </Stack>
+                      )}
+                    </Paper>
+                  ))}
+                </Stack>
+              )}
+
+              {sideTab === 2 && (
+                <Stack spacing={1.5}>
+                  {polls.map((poll) => (
+                    <Paper key={poll.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                      <Typography variant="subtitle2" fontWeight={700}>{poll.question}</Typography>
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        {poll.options.map((option) => {
+                          const summaryItem = Array.isArray(poll.summary) ? poll.summary.find((item) => item.option === option) : null;
+                          return (
+                            <Button key={option} variant={poll.my_response === option ? 'contained' : 'outlined'} onClick={() => handleRespondToPoll(poll.id, option)}>
+                              {option}{summaryItem ? ` (${summaryItem.count})` : ''}
+                            </Button>
+                          );
+                        })}
+                      </Stack>
+                    </Paper>
+                  ))}
+                  {polls.length === 0 && <Typography color="text.secondary">No polls yet.</Typography>}
+                </Stack>
+              )}
+
+              {sideTab === 3 && (
+                <Stack spacing={1.5}>
+                  {files.map((file) => (
+                    <Paper key={file.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                      <Typography variant="body2" fontWeight={700}>{file.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">{file.file_type} shared by {file.uploader_first_name} {file.uploader_last_name}</Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <Button size="small" href={file.file_url} target="_blank" rel="noreferrer">Open</Button>
+                      </Box>
+                    </Paper>
+                  ))}
+                  {files.length === 0 && <Typography color="text.secondary">No shared resources yet.</Typography>}
+                </Stack>
+              )}
+
+              {sideTab === 4 && (
+                <Stack spacing={1.5}>
+                  {recordings.map((recording) => (
+                    <Paper key={recording.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                      <Typography variant="body2" fontWeight={700}>{recording.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Uploaded by {recording.uploader_first_name} {recording.uploader_last_name} • expires in about {recording.expires_in_hours} hour(s)
+                      </Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <video controls preload="metadata" style={{ width: '100%', borderRadius: 12 }} src={recording.file_url} />
+                      </Box>
+                      {isManager && (
+                        <Box sx={{ mt: 1 }}>
+                          <Button size="small" startIcon={<Download />} onClick={() => handleDownloadRecording(recording)}>
+                            Download
+                          </Button>
+                        </Box>
+                      )}
+                    </Paper>
+                  ))}
+                  {recordings.length === 0 && <Typography color="text.secondary">No recordings yet.</Typography>}
+                </Stack>
+              )}
+            </Paper>
+          </Grid>
+        </Grid>
+
+        <Paper
+          sx={{
+            position: 'fixed',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            bottom: 18,
+            zIndex: 1400,
+            px: 1.5,
+            py: 1,
+            borderRadius: 999,
+            bgcolor: 'rgba(15,23,42,0.9)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(148,163,184,0.18)',
+            width: 'min(96vw, 980px)',
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Button variant={micOn ? 'outlined' : 'contained'} color={micOn ? 'inherit' : 'warning'} startIcon={micOn ? <Mic /> : <MicOff />} onClick={() => setMicOn((current) => !current)}>
+                {micOn ? 'Mute' : 'Unmute'}
+              </Button>
+              <Button variant={cameraOn ? 'outlined' : 'contained'} color={cameraOn ? 'inherit' : 'warning'} startIcon={cameraOn ? <Videocam /> : <VideocamOff />} onClick={() => setCameraOn((current) => !current)}>
+                {cameraOn ? 'Camera' : 'Camera Off'}
+              </Button>
+              <Button variant={screenSharing ? 'contained' : 'outlined'} color={screenSharing ? 'secondary' : 'inherit'} startIcon={screenSharing ? <StopScreenShare /> : <ScreenShare />} onClick={handleToggleScreenShare}>
+                {screenSharing ? 'Stop Share' : 'Share Screen'}
+              </Button>
+              <Button variant={handRaised ? 'contained' : 'outlined'} color={handRaised ? 'warning' : 'inherit'} startIcon={<PanTool />} onClick={toggleHand}>
+                Raise Hand
+              </Button>
+            </Stack>
+
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {isManager && room.recording_enabled && (
+                <Button variant={isRecording ? 'contained' : 'outlined'} color={isRecording ? 'error' : 'inherit'} startIcon={<RadioButtonChecked />} onClick={isRecording ? stopRecording : startRecording}>
+                  {isRecording ? `Stop ${formatSeconds(recordingElapsed)}` : 'Record'}
+                </Button>
+              )}
+              {isManager && (
+                <Button variant="outlined" startIcon={<VolumeOff />} onClick={() => handleManagerAction('mute-all')} disabled={actionLoading}>
+                  Mute All
+                </Button>
+              )}
+              {isManager && (
+                <Button variant="outlined" startIcon={<HowToReg />} onClick={() => handleManagerAction('attendance')} disabled={actionLoading}>
+                  Attendance
+                </Button>
+              )}
+              {isManager && (
+                <Button variant="outlined" startIcon={<Poll />} onClick={() => setPollOpen(true)} disabled={actionLoading}>
+                  Poll
+                </Button>
+              )}
+              {isManager && (
+                <Button variant="outlined" startIcon={<FilePresent />} onClick={() => setFileOpen(true)} disabled={actionLoading || !room.allow_file_sharing}>
+                  File
+                </Button>
+              )}
+              {isManager && room.status !== 'live' && (
+                <Button variant="contained" color="success" startIcon={<PlayArrow />} onClick={() => handleManagerAction('start')} disabled={actionLoading}>
+                  Start
+                </Button>
+              )}
+              {isManager && room.status === 'live' && (
+                <Button variant="contained" color="error" startIcon={<Stop />} onClick={() => handleManagerAction('end')} disabled={actionLoading}>
+                  End
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+        </Paper>
+
+        {reactions.length > 0 && (
+          <Stack direction="row" spacing={1} sx={{ position: 'fixed', right: 24, bottom: 24, zIndex: 1300 }}>
+            {reactions.slice(-3).map((reaction) => (
+              <Chip key={reaction.id} label={`${reaction.emoji} ${reaction.firstName || 'Participant'}`} color="secondary" />
+            ))}
+          </Stack>
+        )}
+      </Box>
+
+      <PollDialog open={pollOpen} onClose={() => setPollOpen(false)} onSubmit={handleCreatePoll} loading={actionLoading} />
+      <FileDialog open={fileOpen} onClose={() => setFileOpen(false)} onSubmit={handleShareFile} loading={actionLoading} />
+
+      {chatPopped && (
+        <Paper
+          elevation={12}
+          sx={{
+            position: 'fixed',
+            left: chatPos.x,
+            top: chatPos.y,
+            width: 360,
+            maxHeight: 560,
+            zIndex: 1500,
+            borderRadius: 3,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            onMouseDown={startChatDrag}
+            sx={{ px: 2, py: 1, bgcolor: '#1e293b', cursor: 'grab', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#f8fafc' }}>Chat</Typography>
+            <Tooltip title="Dock to panel">
+              <IconButton size="small" onClick={() => { setChatPopped(false); setSideTab(0); }} sx={{ color: '#94a3b8' }}>
+                <OpenInNew sx={{ transform: 'rotate(180deg)', fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <Box sx={{ px: 2, py: 1, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+            <FormControl size="small" fullWidth disabled={!room.allow_private_chat}>
+              <InputLabel>Message Scope</InputLabel>
+              <Select value={recipientId} label="Message Scope" onChange={(e) => setRecipientId(e.target.value)}>
+                <MenuItem value="">Public chat</MenuItem>
+                {participants.filter((p) => String(p.user_id) !== String(user?.id)).map((p) => (
+                  <MenuItem key={p.user_id} value={p.user_id}>Private to {p.first_name} {p.last_name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+          <List sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 0.5 }}>
+            {messages.map((message) => (
+              <ListItem key={message.id} alignItems="flex-start" disableGutters>
+                <ListItemAvatar>
+                  <Avatar sx={{ width: 30, height: 30, fontSize: 13 }}>{message.sender_first_name?.[0]}{message.sender_last_name?.[0]}</Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={
+                    <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                      <Typography variant="caption" fontWeight={700}>{message.sender_first_name} {message.sender_last_name}</Typography>
+                      {message.recipient_id ? <Chip label="Private" size="small" color="secondary" sx={{ height: 16, fontSize: 10 }} /> : null}
+                    </Stack>
+                  }
+                  secondary={<>
+                    <Typography variant="body2" sx={{ mt: 0.25 }}>{message.content}</Typography>
+                    <Typography variant="caption" color="text.secondary">{new Date(message.created_at).toLocaleTimeString()}</Typography>
+                  </>}
+                />
+              </ListItem>
+            ))}
+          </List>
+          <Box sx={{ p: 1.5, borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+            <TextField
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+              placeholder="Send a message"
+              fullWidth
+              size="small"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={handleSendMessage} color="primary" size="small"><Send /></IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+        </Paper>
+      )}
+    </Layout>
+  );
+};
+
+export default EduMeetRoom;

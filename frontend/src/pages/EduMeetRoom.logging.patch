@@ -1,0 +1,33 @@
+// PATCH FILE FOR EDUMEAT ROOM LOGGING
+// Apply these replacements carefully in this order
+
+// 1. participant:presence logging (line ~421)
+// FROM:
+socket.on('participant:presence', (nextParticipants) => setParticipants(nextParticipants));
+
+// TO:
+socket.on('participant:presence', (nextParticipants) => {
+  console.debug('[EduMeet-Debug] participant:presence update', {
+    count: nextParticipants?.length,
+    participants: nextParticipants?.map((p) => ({
+      id: p.user_id,
+      name: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+      micEnabled: p.mic_enabled,
+      videoEnabled: p.video_enabled,
+      role: p.role,
+    })) || [],
+  });
+  setParticipants(nextParticipants);
+});
+
+// 2. getUserMedia logging (line ~847)
+// Add console.debug BEFORE getUserMedia call and in success/error handlers
+
+// 3. syncOutboundTracksToPeers logging (line ~395)
+// Add detailed logging for track state and peer replacements
+
+// 4. createPeerConnection initial track logging (line ~585)
+// Add logging for initial transceiver state
+
+// 5. renegotiateAllPeers logging (line ~474)
+// Add logging before and during peer renegotiation

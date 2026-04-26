@@ -15,11 +15,18 @@ const assertFaculty = (req, res) => {
   return true;
 };
 
-const getRoomWithAccess = async (roomId, userId, schoolId, requireFaculty = false) => {
-  const [[room]] = await db.query(
-    'SELECT * FROM codearena_rooms WHERE id = ? AND school_id = ?',
-    [roomId, schoolId]
-  );
+const getRoomWithAccess = async (roomId, userId, schoolId, userRole, requireFaculty = false) => {
+  // Superadmins can access any room
+  let query;
+  let params;
+  if (userRole === 'super_admin') {
+    query = 'SELECT * FROM codearena_rooms WHERE id = ?';
+    params = [roomId];
+  } else {
+    query = 'SELECT * FROM codearena_rooms WHERE id = ? AND school_id = ?';
+    params = [roomId, schoolId];
+  }
+  const [[room]] = await db.query(query, params);
   if (!room) return { error: 'Room not found', status: 404 };
 
   if (requireFaculty && room.creator_id !== userId) {
@@ -123,9 +130,9 @@ export const listRooms = async (req, res) => {
 export const getRoom = async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { id: userId, school_id: schoolId } = req.user;
+    const { id: userId, school_id: schoolId, role } = req.user;
 
-    const { room, error, status } = await getRoomWithAccess(roomId, userId, schoolId);
+    const { room, error, status } = await getRoomWithAccess(roomId, userId, schoolId, role);
     if (error) return res.status(status).json({ success: false, message: error });
 
     // Fetch problems (hide test cases from students in exam mode)

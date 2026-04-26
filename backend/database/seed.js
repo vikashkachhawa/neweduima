@@ -14,7 +14,7 @@ const seedDatabase = async () => {
         // Insert Super Admin
         await db.query(
             `INSERT IGNORE INTO users (school_id, email, password_hash, first_name, last_name, role, is_active, must_change_password)
-             VALUES (NULL, 'superadmin@eduima.com', ?, 'Super', 'Admin', 'super_admin', TRUE, FALSE)`,
+             VALUES (NULL, 'superadmin@app.eduima.com', ?, 'Super', 'Admin', 'super_admin', TRUE, FALSE)`,
             [superAdminPassword]
         );
         console.log('✅ Super Admin created');
@@ -54,7 +54,7 @@ const seedDatabase = async () => {
 
         console.log('\n✅ Database seeded successfully!');
         console.log('\nDefault Credentials:');
-        console.log('Super Admin: superadmin@eduima.com / SuperAdmin@123');
+        console.log('Super Admin: superadmin@app.eduima.com / SuperAdmin@123');
         console.log('School Admin: admin@demopublicschool.com / Admin@123');
         console.log('Faculty: faculty@demopublicschool.com / Faculty@123');
         console.log('Student: student@demopublicschool.com / Student@123');

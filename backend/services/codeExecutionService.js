@@ -374,16 +374,44 @@ export const evaluateAgainstTestCases = async ({ language, code, testCases, time
   let totalTime = 0;
 
   for (const tc of testCases) {
-    const safeInput = String(tc.input_data || '').substring(0, 10_000);
+    let safeInput = String(tc.input_data || '').substring(0, 10_000);
+    
+    // Ensure input ends with newline for languages that use input() functions
+    if (safeInput && !safeInput.endsWith('\n')) {
+      safeInput += '\n';
+    }
+    
     const effectiveTimeout = Math.min(tc.time_limit_ms || timeoutMs, GLOBAL_TIMEOUT_MS);
+    
+    console.log(`[CodeArena] Test case ${tc.id}: Input (${safeInput.length} chars):\n${JSON.stringify(safeInput.substring(0, 200))}`);
 
-    const result = await executeInTempDir(language, code, safeInput, effectiveTimeout);
+    let result = await executeInTempDir(language, code, safeInput, effectiveTimeout);
+
+    // Teacher-friendly fallback for common beginner Python tasks:
+    // if stdin is comma-separated (e.g. "10,20") and code expects multiple input() calls,
+    // retry once with newline-separated input on EOF.
+    const eofInPython =
+      language === 'python' &&
+      result.stderr &&
+      /EOFError:\s*EOF when reading a line/i.test(result.stderr);
+    const looksCommaSeparatedSingleLine = safeInput.includes(',') && !safeInput.includes('\n');
+
+    if (eofInPython && looksCommaSeparatedSingleLine) {
+      const retriedInput = safeInput
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join('\n') + '\n';
+      result = await executeInTempDir(language, code, retriedInput, effectiveTimeout);
+    }
 
     const actualOutput = result.stdout.trim();
     const expectedOutput = String(tc.expected_output || '').trim();
     const isPassed = !result.timedOut && result.success && actualOutput === expectedOutput;
 
     totalTime += result.executionTimeMs;
+    
+    console.log(`[CodeArena] Test case ${tc.id}: Passed=${isPassed}, Expected=${JSON.stringify(expectedOutput.substring(0, 100))}, Actual=${JSON.stringify(actualOutput.substring(0, 100))}`);
 
     results.push({
       test_case_id: tc.id,

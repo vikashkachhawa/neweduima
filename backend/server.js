@@ -26,7 +26,10 @@ import notificationRoutes from './routes/notifications.js';
 import passwordResetRoutes from './routes/passwordResetRoutes.js';
 import gamificationRoutes from './routes/gamification.js';
 import codeArenaRoutes from './routes/codeArena.js';
+import eduMeetRoutes from './routes/eduMeet.js';
 import { startSession, sendInput, killSession, killAllSessions } from './services/interactiveExecutionService.js';
+import { registerEduMeetSocket } from './services/eduMeetSocketService.js';
+import { cleanupExpiredEduMeetRecordings } from './services/eduMeetRecordingService.js';
 import errorHandler from './middleware/errorHandler.js';
 import { logError, trackPerformance } from './middleware/analytics.js';
 import Subscription from './models/Subscription.js';
@@ -46,6 +49,7 @@ import { ensureFacultyProfileSchema } from './database/ensureFacultyProfileSchem
 import { ensureGamificationSchema } from './database/ensureGamificationSchema.js';
 import { ensureRBACSchema } from './database/ensureRBACSchema.js';
 import { ensureCodeArenaSchema } from './database/ensureCodeArenaSchema.js';
+import { ensureEduMeetSchema } from './database/ensureEduMeetSchema.js';
 import './config/database.js';
 
 dotenv.config();
@@ -54,15 +58,25 @@ const app        = express();
 const httpServer = createServer(app);
 const PORT       = process.env.PORT || 5000;
 
+const parseOrigins = (value) => {
+    if (!value) return [];
+    return String(value)
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+};
+
 const allowedOrigins = new Set([
-    process.env.FRONTEND_URL || 'http://localhost:5173',
+    ...parseOrigins(process.env.FRONTEND_URLS),
+    process.env.FRONTEND_URL,
+    'https://app.eduima.com',
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:5175',
     'http://127.0.0.1:5173',
     'http://127.0.0.1:5174',
     'http://127.0.0.1:5175'
-]);
+].filter(Boolean));
 
 // ── Socket.io ──────────────────────────────────────────────────────────────
 const io = new SocketIOServer(httpServer, {
@@ -146,6 +160,8 @@ codeArenaIO.on('connection', (socket) => {
     });
 });
 
+registerEduMeetSocket(io);
+
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
     origin: (origin, callback) => {
@@ -204,6 +220,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
 app.use('/api/gamification', gamificationRoutes);
 app.use('/api/codearena', codeArenaRoutes);
+app.use('/api/edumeet', eduMeetRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -256,6 +273,18 @@ cron.schedule('0 */4 * * *', async () => {
     }
 });
 
+// Remove EduMeet recordings after 24 hours
+cron.schedule('0 * * * *', async () => {
+    try {
+        const count = await cleanupExpiredEduMeetRecordings();
+        if (count > 0) {
+            console.log(`✓ Deleted ${count} expired EduMeet recording(s)`);
+        }
+    } catch (error) {
+        console.error('✗ EduMeet recording cleanup failed:', error.message);
+    }
+});
+
 // Start server
 const startServer = async () => {
     await ensurePasswordResetSchema();
@@ -273,12 +302,14 @@ const startServer = async () => {
     await ensureGamificationSchema();
     await ensureRBACSchema();
     await ensureCodeArenaSchema();
+    await ensureEduMeetSchema();
 
     httpServer.listen(PORT, () => {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
         console.log(`🔌 WebSocket (CodeArena) namespace: /codearena`);
+        console.log(`🎥 WebSocket (EduMeet) namespace: /edumeet`);
     });
 
     // Graceful shutdown — clean up any running child processes

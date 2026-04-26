@@ -239,51 +239,6 @@ const Login = () => {
                         </Box>
                     </form>
 
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.8, duration: 0.5 }}
-                    >
-                        <Divider sx={{ my: 3 }} />
-                        <Box
-                            sx={{
-                                p: 2.5,
-                                bgcolor: 'action.hover',
-                                borderRadius: 2,
-                                border: '1px solid',
-                                borderColor: 'divider',
-                            }}
-                        >
-                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 2, textAlign: 'center' }}>
-                                📝 Demo Credentials
-                            </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                <Box>
-                                    <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                                        Super Admin
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', color: 'text.secondary' }}>
-                                        Email: superadmin@eduima.com
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', color: 'text.secondary' }}>
-                                        Password: SuperAdmin@123
-                                    </Typography>
-                                </Box>
-                                <Divider />
-                                <Box>
-                                    <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                                        School Admin
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', color: 'text.secondary' }}>
-                                        Email: admin@demopublicschool.com
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', color: 'text.secondary' }}>
-                                        Password: Admin@123
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        </Box>
-                    </motion.div>
                 </Paper>
             </motion.div>
         </Box>
